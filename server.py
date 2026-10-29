@@ -22,7 +22,7 @@ def emotion_detector_route():
 
     result = emotion_detector(text_to_analyze)
     if result["dominant_emotion"] is None:
-        return "Invalid input! Please try again!", 400
+        return "Emotion service is unavailable. Please try again later.", 502
 
     return (
         "For the given statement, the system response is "
