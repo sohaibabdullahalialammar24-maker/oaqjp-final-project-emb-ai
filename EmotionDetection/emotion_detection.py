@@ -1,4 +1,4 @@
-"""Emotion detection client for the Skills Network Watson NLP service."""
+"""Client for the Skills Network Watson NLP emotion service."""
 
 import requests
 
@@ -6,28 +6,33 @@ WATSON_EMOTION_URL = (
     "https://sn-watson-emotion.labs.skills.network/"
     "v1/watson.runtime.nlp.v1/NlpService/EmotionPredict"
 )
+WATSON_HEADERS = {
+    "grpc-metadata-mm-model-id": "emotion_aggregated-workflow_lang_en_stock"
+}
+EMOTIONS = ("anger", "disgust", "fear", "joy", "sadness")
 
 
 def _empty_result():
-    """Return the required empty result for invalid input/service errors."""
+    """Return an empty, consistently shaped result when input/service data is unavailable."""
     return {
-        "anger": None,
-        "disgust": None,
-        "fear": None,
-        "joy": None,
-        "sadness": None,
+        **{emotion: None for emotion in EMOTIONS},
         "dominant_emotion": None,
     }
 
 
 def emotion_detector(text_to_analyze):
-    """Return five emotion scores and the dominant emotion for input text."""
+    """Return five Watson emotion scores and their dominant label for input text."""
     if not isinstance(text_to_analyze, str) or not text_to_analyze.strip():
         return _empty_result()
 
     payload = {"raw_document": {"text": text_to_analyze}}
     try:
-        response = requests.post(WATSON_EMOTION_URL, json=payload, timeout=15)
+        response = requests.post(
+            WATSON_EMOTION_URL,
+            json=payload,
+            headers=WATSON_HEADERS,
+            timeout=15,
+        )
     except requests.RequestException:
         return _empty_result()
 
@@ -35,19 +40,13 @@ def emotion_detector(text_to_analyze):
         return _empty_result()
 
     try:
-        emotions = response.json()["emotionPredictions"][0]["emotion"]
-        result = {
-            "anger": emotions["anger"],
-            "disgust": emotions["disgust"],
-            "fear": emotions["fear"],
-            "joy": emotions["joy"],
-            "sadness": emotions["sadness"],
-        }
+        scores = response.json()["emotionPredictions"][0]["emotion"]
+        result = {emotion: scores[emotion] for emotion in EMOTIONS}
     except (KeyError, IndexError, TypeError, ValueError):
         return _empty_result()
 
-    result["dominant_emotion"] = max(
-        ("anger", "disgust", "fear", "joy", "sadness"),
-        key=lambda emotion: result[emotion],
-    )
+    if any(not isinstance(score, (int, float)) for score in result.values()):
+        return _empty_result()
+
+    result["dominant_emotion"] = max(EMOTIONS, key=result.get)
     return result
